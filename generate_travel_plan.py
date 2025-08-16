@@ -5,6 +5,7 @@ import requests
 import streamlit as st
 from langchain import hub
 from langchain.agents import create_react_agent, AgentExecutor
+from pydantic import BaseModel, Field
 
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 tavily_api_key = st.secrets["TAVILY_API_KEY"]
@@ -39,18 +40,31 @@ def weather_search(location):
     print(json_response.get("current", {}).get("temperature", 0), 'weather_search')
     return json_response.get("current", {}).get("temperature", 0)
 
-@tool
-def hotel_search(location: str):
-    """
-    Search for the hotels in a given location.
-    """
-    response = tavily_search.invoke({"query": f"Hotels in {location}"})
-    content = ''
-    for result in response.get("results", []):
-        content += f"{result.get('content')} "
+class HotelSearchArgs(BaseModel):
+    """Arguments for hotel search tool"""
+    location: str = Field(description="The city name where to search for hotels (e.g., 'Paris', 'Mumbai', 'London')")
+    prefered_time: int = Field(default=7, description="Number of days for the hotel stay (default: 7 days)")
 
-    print(content, 'hotel_search')
-    return content
+@tool(args_schema=HotelSearchArgs)
+def hotel_search(location: str, prefered_time: int = 7):
+    """
+    Search for hotels in a given city for a specific number of days.
+    
+    Args:
+        location: The city name (e.g., 'Paris', 'Mumbai', 'London')
+        prefered_time: Number of days for hotel stay (defaults to 7 if not provided)
+    """
+    try:
+        response = tavily_search.invoke({"query": f"best hotels in {location} for {prefered_time} days booking recommendations"})
+        content = ''
+        for result in response.get("results", []):
+            content += f"{result.get('content')} "
+
+        print(f"Hotel search for {location} ({prefered_time} days): {content[:100]}...", 'hotel_search')
+        return content if content else f"No hotel information found for {location}"
+    except Exception as e:
+        print(f"Error in hotel_search: {e}")
+        return f"Error searching hotels for {location}: {str(e)}"
    
 
     
@@ -58,10 +72,19 @@ def generate_travel_plan(traveling_from, traveling_to, days, interests, prefered
     """
     Generate a comprehensive travel plan for a given user input.
     """
-    user_query = f"""Create a travel plan for {traveling_to} for {days} days with {interests} in {prefered_time} and traveling from {traveling_from} starting according to weather. 
-    Suggest best hotels in {traveling_to} city.
-    Note: Response should be in bullet points.
-    ."""
+    user_query = f"""Create a comprehensive travel plan for {traveling_to} for {days} days with interests in {interests}, preferred activity time: {prefered_time}, traveling from {traveling_from}.
+
+Tasks to complete:
+1. Get current weather information for {traveling_to}
+2. Search for best hotels in {traveling_to} for {days} days (use hotel_search tool with location="{traveling_to}" and prefered_time={days})
+3. Research top attractions and activities matching the interests: {interests}
+4. Create a detailed itinerary optimized for {prefered_time} activities
+
+Format the response in bullet points with clear sections:
+- Weather Information
+- Hotel Recommendations 
+- Daily Itinerary
+- Local Tips and Recommendations"""
 
     prompt = hub.pull("hwchase17/react")
 
