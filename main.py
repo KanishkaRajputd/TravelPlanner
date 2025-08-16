@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from handle_llm import generate_travel_plan
+from generate_travel_plan import generate_travel_plan
 
 # Page configuration
 st.set_page_config(
@@ -186,12 +186,6 @@ def main():
             index=0,
             key="travel_time_input"
         )
-        
-        date = st.date_input(
-            "Enter the date of your travel:",
-            key="date_input"
-        )
-        
         # Generate button
         generate_clicked = st.button("Generate Travel Plan", key="generate_btn")
     
@@ -233,7 +227,6 @@ def main():
                         result = generate_travel_plan(
                             traveling_to=city,
                             traveling_from=departure_city,
-                            date=date,
                             days=str(days_int),
                             interests=interests,
                             prefered_time=travel_time
